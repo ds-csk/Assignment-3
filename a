@@ -1,0 +1,330 @@
+Assignment 3
+Name: Devansh Singh
+Roll No: 102103686
+Subgroup: 3CO33
+Q1: K-Fold Cross Validation for Multiple Linear Regression (Least Square Error Fit)
+Download the dataset regarding USA House Price Prediction from the following link:
+https://drive.google.com/file/d/1O_NwpJT-8xGfU_-3llUl2sgPu0xllOrX/view?usp=sharing
+Load the dataset and Implement 5- fold cross validation for multiple linear regression
+(using least square error fit).
+Steps:
+a) Divide the dataset into input features (all columns except price) and output variable
+(price)
+b) Scale the values of input features.
+c) Divide input and output features into five folds.
+d) Run five iterations, in each iteration consider one-fold as test set and remaining
+four sets as training set. Find the beta (β) matrix, predicted values, and R2_score
+for each iteration using least square error fit.
+e) Use the best value of (β) matrix (for which R2_score is maximum), to train the
+regressor for 70% of data and test the performance for remaining 30% data.
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
+from sklearn.model_selection import train_test_split
+
+# Generate a sample dataset (replace this with your actual data loading code)
+np.random.seed(42)
+n_samples = 1000
+n_features = 5
+
+X = np.random.rand(n_samples, n_features)
+y = 2 * X[:, 0] + 3 * X[:, 1] - X[:, 2] + 0.5 * X[:, 3] - 1.5 * X[:, 4] + np.random.randn(n_samples) * 0.1
+
+# Create a DataFrame (optional, but useful for visualization)
+df = pd.DataFrame(X, columns=[f'Feature_{i}' for i in range(n_features)])
+df['Price'] = y
+
+# a) Divide the dataset into input features and output variable
+X = df.drop('Price', axis=1).values  # Input features
+y = df['Price'].values  # Output feature (Price)
+
+# b) Scale the input features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# c) Divide input and output features into five folds using KFold cross-validation
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+# Store results for each fold
+r2_scores = []
+beta_matrices = []
+best_beta = None
+best_r2 = -np.inf
+
+# d) Run five iterations, considering one-fold as the test set and the remaining four sets as the training set
+for fold, (train_index, test_index) in enumerate(kf.split(X_scaled)):
+    X_train, X_test = X_scaled[train_index], X_scaled[test_index]
+    y_train, y_test = y[train_index], y[test_index]
+
+    # Find the beta (β) matrix using the Normal Equation for Least Squares Fit: β = (X.T * X)^-1 * X.T * y
+    X_train_with_bias = np.c_[np.ones(X_train.shape[0]), X_train]  # Add a bias column of 1s
+    beta = np.linalg.inv(X_train_with_bias.T @ X_train_with_bias) @ X_train_with_bias.T @ y_train
+    beta_matrices.append(beta)
+
+    # Predict values for the test set
+    X_test_with_bias = np.c_[np.ones(X_test.shape[0]), X_test]  # Add a bias column of 1s
+    y_pred = X_test_with_bias @ beta
+
+    # Calculate R2 score
+    r2 = r2_score(y_test, y_pred)
+    r2_scores.append(r2)
+
+    # Update the best beta matrix if this fold has the highest R2 score
+    if r2 > best_r2:
+        best_r2 = r2
+        best_beta = beta
+
+    print(f"Fold {fold + 1}: R2 Score = {r2}")
+
+# Display the best beta matrix
+print("Best R2 Score:", best_r2)
+print("Best Beta Matrix:\n", best_beta)
+
+# e) Use the best beta matrix to train on 70% of the data and test on the remaining 30%
+X_train_full, X_test_full, y_train_full, y_test_full = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+
+# Training with the best beta matrix
+X_train_full_with_bias = np.c_[np.ones(X_train_full.shape[0]), X_train_full]
+X_test_full_with_bias = np.c_[np.ones(X_test_full.shape[0]), X_test_full]
+
+# Using the best beta matrix for prediction
+y_pred_final = X_test_full_with_bias @ best_beta
+
+# Evaluate final model performance using R2 score
+final_r2 = r2_score(y_test_full, y_pred_final)
+print("Final R2 Score on 30% Test Data:", final_r2)
+Q2- Concept of Validation set for Multiple Linear Regression (Gradient Descent
+Optimization)
+Consider the same dataset of Q1, rather than dividing the dataset into five folds, divide the
+dataset into training set (56%), validation set (14%), and test set (30%).
+Consider four different values of learning rate i.e. {0.001,0.01,0.1,1}. Compute the values of
+regression coefficients for each value of learning rate after 1000 iterations.
+For each set of regression coefficients, compute R2_score for validation and test set and find
+the best value of regression coefficients.
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
+
+# Generate a sample dataset (replace this with your actual data loading code)
+np.random.seed(42)
+n_samples = 1000
+n_features = 5
+
+X = np.random.rand(n_samples, n_features)
+y = 2 * X[:, 0] + 3 * X[:, 1] - X[:, 2] + 0.5 * X[:, 3] - 1.5 * X[:, 4] + np.random.randn(n_samples) * 0.1
+
+# Create a DataFrame (optional, but useful for visualization)
+df = pd.DataFrame(X, columns=[f'Feature_{i}' for i in range(n_features)])
+df['Price'] = y
+
+# Define Gradient Descent Function
+def gradient_descent(X, y, learning_rate, iterations):
+    m, n = X.shape
+    beta = np.zeros(n)  # Initialize regression coefficients
+    for i in range(iterations):
+        y_pred = X @ beta  # Prediction
+        error = y_pred - y  # Error
+        gradient = X.T @ error / m  # Gradient computation
+        beta = beta - learning_rate * gradient  # Update beta
+    return beta
+
+# Compute the R2 score for a given dataset and coefficients
+def compute_r2(X, y, beta):
+    y_pred = X @ beta
+    return r2_score(y, y_pred)
+
+# a) Divide the dataset into input features (all columns except 'Price') and output variable (Price)
+X = df.drop('Price', axis=1).values  # Input features
+y = df['Price'].values  # Output feature (Price)
+
+# b) Split the dataset into training (56%), validation (14%), and test set (30%)
+X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.44, random_state=42)  # 56% training, 44% temporary
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.68, random_state=42)  # 14% validation, 30% test
+
+# c) Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_val_scaled = scaler.transform(X_val)
+X_test_scaled = scaler.transform(X_test)
+
+# Add a bias term (column of ones) to the input features
+X_train_scaled = np.c_[np.ones(X_train_scaled.shape[0]), X_train_scaled]
+X_val_scaled = np.c_[np.ones(X_val_scaled.shape[0]), X_val_scaled]
+X_test_scaled = np.c_[np.ones(X_test_scaled.shape[0]), X_test_scaled]
+
+# d) Initialize parameters
+learning_rates = [0.001, 0.01, 0.1, 1]
+iterations = 1000
+
+# Store the results for each learning rate
+best_beta = None
+best_r2_val = -np.inf  # Start with a very low value for the best validation R2 score
+best_learning_rate = None
+
+# Run gradient descent for each learning rate and track the best set of coefficients
+for lr in learning_rates:
+    print(f"Learning Rate: {lr}")
+
+    # Perform gradient descent
+    beta = gradient_descent(X_train_scaled, y_train, lr, iterations)
+
+    # Compute R2 score for validation and test sets
+    r2_val = compute_r2(X_val_scaled, y_val, beta)
+    r2_test = compute_r2(X_test_scaled, y_test, beta)
+
+    print(f"Validation R2 Score: {r2_val}, Test R2 Score: {r2_test}")
+
+    # Track the best beta (based on validation set)
+    if r2_val > best_r2_val:
+        best_r2_val = r2_val
+        best_beta = beta
+        best_learning_rate = lr
+
+print(f"\nBest Learning Rate: {best_learning_rate}")
+print(f"Best R2 Score on Validation Set: {best_r2_val}")
+print(f"Best Beta Coefficients:\n{best_beta}")
+
+# Finally, test the performance of the best model on the test set
+final_r2_test = compute_r2(X_test_scaled, y_test, best_beta)
+print(f"Final R2 Score on Test Set: {final_r2_test}")
+Q3- Pre-processing and Multiple Linear Regression
+Download the dataset regarding Car Price Prediction from the following link:
+https://archive.ics.uci.edu/ml/machine-learning-databases/autos/imports-85.data
+1. Load the dataset with following column names ["symboling", "normalized_losses",
+"make", "fuel_type", "aspiration","num_doors", "body_style", "drive_wheels",
+"engine_location", "wheel_base", "length", "width", "height", "curb_weight",
+"engine_type", "num_cylinders", "engine_size", "fuel_system", "bore", "stroke",
+"compression_ratio", "horsepower", "peak_rpm", "city_mpg", "highway_mpg", "price"]
+and replace all ? values with NaN
+2. Replace all NaN values with central tendency imputation. Drop the rows with NaN
+values in price column
+3. There are 10 columns in the dataset with non-numeric values. Convert these values to
+numeric values using following scheme:
+(i) For “num_doors” and “num_cylinders”: convert words (number names) to figures
+for e.g., two to 2
+(ii) For "body_style", "drive_wheels": use dummy encoding scheme
+(iii) For “make”, “aspiration”, “engine_location”,fuel_type: use label encoding
+scheme
+(iv) For fuel_system: replace values containing string pfi to 1 else all values to 0.
+(v) For engine_type: replace values containing string ohc to 1 else all values to 0.
+4. Divide the dataset into input features (all columns except price) and output variable
+(price). Scale all input features.
+5. Train a linear regressor on 70% of data (using inbuilt linear regression function of
+Python) and test its performance on remaining 30% of data.
+6. Reduce the dimensionality of the feature set using inbuilt PCA decomposition and then
+again train a linear regressor on 70% of reduced data (using inbuilt linear regression
+function of Python). Does it lead to any performance improvement on test set?
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.decomposition import PCA
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Install required libraries (if not already installed)
+!pip install -q scikit-learn pandas numpy
+
+# Column names for the dataset
+columns = ["symboling", "normalized_losses", "make", "fuel_type", "aspiration",
+           "num_doors", "body_style", "drive_wheels", "engine_location",
+           "wheel_base", "length", "width", "height", "curb_weight",
+           "engine_type", "num_cylinders", "engine_size", "fuel_system",
+           "bore", "stroke", "compression_ratio", "horsepower", "peak_rpm",
+           "city_mpg", "highway_mpg", "price"]
+
+# 1. Load the dataset and replace '?' with NaN
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/autos/imports-85.data"
+df = pd.read_csv(url, names=columns, na_values='?')
+
+# 2. Impute missing values using central tendency and drop rows with NaN in 'price'
+# Convert all columns to numeric where appropriate, coercing errors to NaN
+for col in ['normalized_losses', 'bore', 'stroke', 'horsepower', 'peak_rpm', 'price']:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Handle missing values using median for numerical columns
+imputer = SimpleImputer(strategy='median')
+df[['normalized_losses', 'bore', 'stroke', 'horsepower', 'peak_rpm']] = imputer.fit_transform(df[['normalized_losses', 'bore', 'stroke', 'horsepower', 'peak_rpm']])
+
+# Drop rows where 'price' is NaN (since it is the target variable)
+df = df.dropna(subset=['price'])
+
+# Fill missing values for 'num_doors' and 'num_cylinders' with the most frequent value
+df['num_doors'].fillna(df['num_doors'].mode()[0], inplace=True)
+df['num_cylinders'].fillna(df['num_cylinders'].mode()[0], inplace=True)
+
+# 3. Encoding non-numeric values:
+# (i) Convert words to numbers for 'num_doors' and 'num_cylinders'
+num_mapping = {
+    'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'eight': 8, 'twelve': 12
+}
+df['num_doors'] = df['num_doors'].replace(num_mapping)
+df['num_cylinders'] = df['num_cylinders'].replace(num_mapping)
+
+# (ii) Dummy encoding for 'body_style' and 'drive_wheels'
+df = pd.get_dummies(df, columns=['body_style', 'drive_wheels'], drop_first=True)
+
+# (iii) Label encoding for 'make', 'aspiration', 'engine_location', 'fuel_type'
+label_encoder = LabelEncoder()
+for col in ['make', 'aspiration', 'engine_location', 'fuel_type']:
+    df[col] = label_encoder.fit_transform(df[col].astype(str))
+
+# (iv) Replace 'fuel_system' with 1 if it contains 'pfi', else 0
+df['fuel_system'] = df['fuel_system'].apply(lambda x: 1 if 'pfi' in str(x) else 0)
+
+# (v) Replace 'engine_type' with 1 if it contains 'ohc', else 0
+df['engine_type'] = df['engine_type'].apply(lambda x: 1 if 'ohc' in str(x) else 0)
+
+# 4. Divide the dataset into input features (X) and output variable (y)
+X = df.drop('price', axis=1)
+y = df['price']
+
+# Scale all input features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# 5. Train a linear regressor on 70% of data and test on 30%
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+
+# Train Linear Regression model
+lr = LinearRegression()
+lr.fit(X_train, y_train)
+
+# Predict and evaluate the model
+y_pred = lr.predict(X_test)
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f"Linear Regression MSE: {mse}")
+print(f"Linear Regression R2 Score: {r2}")
+
+# 6. Perform PCA and train a linear regressor on reduced data
+# Apply PCA to reduce dimensionality
+pca = PCA(n_components=0.95)  # Keep 95% of variance
+X_pca = pca.fit_transform(X_scaled)
+
+# Split the reduced data into train and test sets
+X_train_pca, X_test_pca, y_train_pca, y_test_pca = train_test_split(X_pca, y, test_size=0.3, random_state=42)
+
+# Train Linear Regression model on PCA-reduced data
+lr_pca = LinearRegression()
+lr_pca.fit(X_train_pca, y_train_pca)
+
+# Predict and evaluate the model
+y_pred_pca = lr_pca.predict(X_test_pca)
+mse_pca = mean_squared_error(y_test_pca, y_pred_pca)
+r2_pca = r2_score(y_test_pca, y_pred_pca)
+
+print(f"Linear Regression with PCA MSE: {mse_pca}")
+print(f"Linear Regression with PCA R2 Score: {r2_pca}")
+
+# Compare performance
+if r2_pca > r2:
+    print("PCA improved the model performance.")
+else:
+    print("PCA did not improve the model performance.")
